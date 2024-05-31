@@ -1,10 +1,10 @@
 package scan
 
 import (
+	"context"
 	"fmt"
 	"golang.org/x/net/proxy"
 	"log"
-	"net"
 	"net/http"
 	"net/netip"
 	"proxyScan/pool"
@@ -47,37 +47,41 @@ func ipGenerator(prefixs []netip.Prefix) func(func(addr netip.Addr)) {
 }
 
 func ScanAll(prefixs []netip.Prefix, port []int) []netip.AddrPort {
-	p := pool.Pool{Size: 3000, Buffer: 1024}
-	p.Init()
 	c := utils.NewCollector[netip.AddrPort]()
 
-	wg := sync.WaitGroup{}
 	addrCount := 0
 	for _, prefix := range prefixs {
 		addrCount += 1 << (32 - prefix.Bits())
 	}
 	addrCount *= len(port)
-	wg.Add(addrCount)
+
+	portScanner, err := NewTcpPort(context.Background(), 3000)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	go func() {
+		for addrPort := range portScanner.Alive {
+			fmt.Println(addrPort.String(), " alive.")
+			c.C <- addrPort
+		}
+	}()
 
 	ipGenerator(prefixs)(func(addr netip.Addr) {
 		for _, pt := range port {
-			p.Submit(func() {
-				defer wg.Done()
-				addrPort := netip.AddrPortFrom(addr, uint16(pt))
-				if TcpPortScan(addrPort.String()) {
-					c.C <- addrPort
-				}
-			})
+			portScanner.Send(netip.AddrPortFrom(addr, uint16(pt)))
 		}
 	})
 
-	wg.Wait()
+	fmt.Println("wait for tcp scan.")
+	portScanner.Wait()
 	aliveTCPAddrs := c.Return()
 	fmt.Println("tcp scan done.")
 
-	p = pool.Pool{Size: 32, Buffer: 16}
+	p := pool.Pool{Size: 32, Buffer: 16}
 	p.Init()
 	c = utils.NewCollector[netip.AddrPort]()
+	var wg sync.WaitGroup
 	wg.Add(len(aliveTCPAddrs))
 	for _, addrPort := range aliveTCPAddrs {
 		p.Submit(func() {
@@ -94,15 +98,15 @@ func ScanAll(prefixs []netip.Prefix, port []int) []netip.AddrPort {
 	return c.Return()
 }
 
-func TcpPortScan(addrPort string) bool {
-	conn, err := net.DialTimeout("tcp", addrPort, 2*time.Second)
-	if err != nil {
-		return false
-	}
-	conn.Close()
-	fmt.Printf("%s alive\n", addrPort)
-	return true
-}
+//func TcpPortScan(addrPort string) bool {
+//	conn, err := net.DialTimeout("tcp", addrPort, 2*time.Second)
+//	if err != nil {
+//		return false
+//	}
+//	conn.Close()
+//	fmt.Printf("%s alive\n", addrPort)
+//	return true
+//}
 
 func Socks5Scan(addrPort string) bool {
 	dialer, err := proxy.SOCKS5("tcp", addrPort, nil, proxy.Direct)
