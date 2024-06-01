@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	"github.com/gopacket/gopacket/pcap"
+	"github.com/google/gopacket/pcap"
 	"github.com/yaklang/yaklang/common/pcapx"
 	"github.com/yaklang/yaklang/common/pcapx/pcaputil"
 	"io"
