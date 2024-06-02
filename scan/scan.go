@@ -50,7 +50,7 @@ func ipGenerator(prefixs []netip.Prefix) func(func(addr netip.Addr)) {
 				ip = ip.Next()
 				select {
 				case <-t.C:
-					fmt.Printf("Generator %f%%\n", float64(current)/float64(all)*100)
+					log.Printf("Generator %f%%\n", float64(current)/float64(all)*100)
 				default:
 				}
 				current++
@@ -74,7 +74,7 @@ func (s *Scanner) ScanAll(prefixs []netip.Prefix, port []int) []netip.AddrPort {
 		}
 		go func() {
 			for addrPort := range portScanner.Alive {
-				fmt.Println(addrPort.String(), " alive.")
+				log.Println(addrPort.String(), " alive.")
 				c.C <- addrPort
 			}
 		}()
@@ -83,7 +83,7 @@ func (s *Scanner) ScanAll(prefixs []netip.Prefix, port []int) []netip.AddrPort {
 				portScanner.Send(netip.AddrPortFrom(addr, uint16(pt)))
 			}
 		})
-		fmt.Println("wait for tcp scan.")
+		log.Println("wait for tcp scan.")
 		portScanner.Wait()
 	} else {
 		p := pool.Pool{Size: s.PortScanRate, Buffer: s.PortScanRate}
@@ -96,19 +96,19 @@ func (s *Scanner) ScanAll(prefixs []netip.Prefix, port []int) []netip.AddrPort {
 					defer wg.Done()
 					if tcpport.CommonScan(addr.String() + ":" + fmt.Sprint(pt)) {
 						addrport := netip.AddrPortFrom(addr, uint16(pt))
-						fmt.Println(addrport.String(), " alive.")
+						log.Println(addrport.String(), " alive.")
 						c.C <- addrport
 					}
 				})
 			}
 		})
-		fmt.Println("wait for tcp scan.")
+		log.Println("wait for tcp scan.")
 		wg.Wait()
 	}
-	fmt.Println("tcp scan done.")
+	log.Println("tcp scan done.")
 	aliveTCPAddrs := c.Return()
 
-	fmt.Println("start socks5 scan with 128 threads.")
+	log.Println("start socks5 scan with 128 threads.")
 	p := pool.Pool{Size: 128, Buffer: 128}
 	p.Init()
 	c = utils.NewCollector[netip.AddrPort]()
@@ -119,14 +119,14 @@ func (s *Scanner) ScanAll(prefixs []netip.Prefix, port []int) []netip.AddrPort {
 			defer wg.Done()
 			if s.scanSocks5(addrPort.String()) {
 				c.C <- addrPort
-				fmt.Printf("Found %s socks5 alive\n", addrPort.String())
+				log.Printf("Found %s socks5 alive\n", addrPort.String())
 			}
 		})
 	}
 
-	fmt.Println("wait for socks5 scan.")
+	log.Println("wait for socks5 scan.")
 	wg.Wait()
-	fmt.Println("socks5 scan done.")
+	log.Println("socks5 scan done.")
 	return c.Return()
 }
 
