@@ -26,43 +26,39 @@ type GeoIP struct {
 	Organization  string  `json:"organization"`
 }
 
-func Position(addrPort string) (string, error) {
+func (s *Scanner) Position(addrPort string) (*GeoIP, error) {
 	dialer, err := proxy.SOCKS5("tcp", addrPort, nil, proxy.Direct)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	dialerCtx, ok := dialer.(proxy.ContextDialer)
 	if !ok {
-		return "", err
+		return nil, err
 	}
 	c := http.Client{
 		Transport: &http.Transport{
 			DialContext: dialerCtx.DialContext,
 		},
-		Timeout: TestTimeout,
+		Timeout: s.TestTimeout,
 	}
 	resp, err := c.Get("https://ip.seeip.org/geoip")
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer c.CloseIdleConnections()
 	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("status code %d", resp.StatusCode)
+		return nil, fmt.Errorf("status code %d", resp.StatusCode)
 	}
 	var geo GeoIP
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	err = json.Unmarshal(body, &geo)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	pos := geo.City
-	if pos == "" {
-		pos = geo.Organization
-	}
+	return &geo, nil
 
-	return fmt.Sprintf("[%s]%s(%s)", geo.CountryCode, pos, addrPort), nil
 }

@@ -8,18 +8,31 @@ import (
 	"net/http"
 	"net/netip"
 	"proxyScan/pool"
+	"proxyScan/scan/tcpport"
 	"proxyScan/utils"
 	"sync"
 	"time"
 )
 
-var (
-	TestURL      = "http://www.gstatic.com/generate_204"
-	TestCallback = func(resp *http.Response) bool {
-		return resp != nil && resp.StatusCode/100 == 2
+type Scanner struct {
+	UsePcap      bool
+	TestUrl      string
+	TestCallback func(resp *http.Response) bool
+	TestTimeout  time.Duration
+	PortScanRate int
+}
+
+func Default() *Scanner {
+	return &Scanner{
+		UsePcap: false,
+		TestUrl: "http://www.gstatic.com/generate_204",
+		TestCallback: func(resp *http.Response) bool {
+			return resp != nil && resp.StatusCode/100 == 2
+		},
+		TestTimeout:  time.Second * 15,
+		PortScanRate: 3000,
 	}
-	TestTimeout = time.Second * 15
-)
+}
 
 func ipGenerator(prefixs []netip.Prefix) func(func(addr netip.Addr)) {
 	return func(yield func(addr netip.Addr)) {
@@ -46,39 +59,57 @@ func ipGenerator(prefixs []netip.Prefix) func(func(addr netip.Addr)) {
 	}
 }
 
-func ScanAll(prefixs []netip.Prefix, port []int) []netip.AddrPort {
+func (s *Scanner) ScanAll(prefixs []netip.Prefix, port []int) []netip.AddrPort {
 	c := utils.NewCollector[netip.AddrPort]()
 
 	addrCount := 0
 	for _, prefix := range prefixs {
 		addrCount += 1 << (32 - prefix.Bits())
 	}
-	addrCount *= len(port)
 
-	portScanner, err := NewTcpPort(context.Background(), 3000)
-	if err != nil {
-		log.Fatal(err)
+	if s.UsePcap {
+		portScanner, err := tcpport.NewPcapScanner(context.Background(), s.PortScanRate)
+		if err != nil {
+			log.Fatal(err)
+		}
+		go func() {
+			for addrPort := range portScanner.Alive {
+				fmt.Println(addrPort.String(), " alive.")
+				c.C <- addrPort
+			}
+		}()
+		ipGenerator(prefixs)(func(addr netip.Addr) {
+			for _, pt := range port {
+				portScanner.Send(netip.AddrPortFrom(addr, uint16(pt)))
+			}
+		})
+		fmt.Println("wait for tcp scan.")
+		portScanner.Wait()
+	} else {
+		p := pool.Pool{Size: s.PortScanRate, Buffer: s.PortScanRate}
+		p.Init()
+		var wg sync.WaitGroup
+		wg.Add(addrCount * len(port))
+		ipGenerator(prefixs)(func(addr netip.Addr) {
+			for _, pt := range port {
+				p.Submit(func() {
+					defer wg.Done()
+					if tcpport.CommonScan(addr.String() + ":" + fmt.Sprint(pt)) {
+						addrport := netip.AddrPortFrom(addr, uint16(pt))
+						fmt.Println(addrport.String(), " alive.")
+						c.C <- addrport
+					}
+				})
+			}
+		})
+		fmt.Println("wait for tcp scan.")
+		wg.Wait()
 	}
-
-	go func() {
-		for addrPort := range portScanner.Alive {
-			fmt.Println(addrPort.String(), " alive.")
-			c.C <- addrPort
-		}
-	}()
-
-	ipGenerator(prefixs)(func(addr netip.Addr) {
-		for _, pt := range port {
-			portScanner.Send(netip.AddrPortFrom(addr, uint16(pt)))
-		}
-	})
-
-	fmt.Println("wait for tcp scan.")
-	portScanner.Wait()
-	aliveTCPAddrs := c.Return()
 	fmt.Println("tcp scan done.")
+	aliveTCPAddrs := c.Return()
 
-	p := pool.Pool{Size: 32, Buffer: 16}
+	fmt.Println("start socks5 scan with 128 threads.")
+	p := pool.Pool{Size: 128, Buffer: 128}
 	p.Init()
 	c = utils.NewCollector[netip.AddrPort]()
 	var wg sync.WaitGroup
@@ -86,29 +117,20 @@ func ScanAll(prefixs []netip.Prefix, port []int) []netip.AddrPort {
 	for _, addrPort := range aliveTCPAddrs {
 		p.Submit(func() {
 			defer wg.Done()
-			if Socks5Scan(addrPort.String()) {
+			if s.scanSocks5(addrPort.String()) {
 				c.C <- addrPort
 				fmt.Printf("Found %s socks5 alive\n", addrPort.String())
 			}
 		})
 	}
 
+	fmt.Println("wait for socks5 scan.")
 	wg.Wait()
 	fmt.Println("socks5 scan done.")
 	return c.Return()
 }
 
-//func TcpPortScan(addrPort string) bool {
-//	conn, err := net.DialTimeout("tcp", addrPort, 2*time.Second)
-//	if err != nil {
-//		return false
-//	}
-//	conn.Close()
-//	fmt.Printf("%s alive\n", addrPort)
-//	return true
-//}
-
-func Socks5Scan(addrPort string) bool {
+func (s *Scanner) scanSocks5(addrPort string) bool {
 	dialer, err := proxy.SOCKS5("tcp", addrPort, nil, proxy.Direct)
 	if err != nil {
 		log.Println(err)
@@ -123,10 +145,10 @@ func Socks5Scan(addrPort string) bool {
 		Transport: &http.Transport{
 			DialContext: dialerCtx.DialContext,
 		},
-		Timeout: TestTimeout,
+		Timeout: s.TestTimeout,
 	}
-	resp, err := c.Get(TestURL)
+	resp, err := c.Get(s.TestUrl)
 
 	defer c.CloseIdleConnections()
-	return TestCallback(resp)
+	return s.TestCallback(resp)
 }

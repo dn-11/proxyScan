@@ -1,4 +1,4 @@
-package scan
+package tcpport
 
 import (
 	"context"
@@ -25,7 +25,7 @@ type TcpPort struct {
 	ctx        context.Context
 	cancelSend context.CancelFunc
 	cancelRead context.CancelFunc
-	ticker     *time.Ticker
+	rate       int
 	pending    *utils.TTLSet[netip.AddrPort]
 
 	handle    *pcap.Handle
@@ -39,7 +39,7 @@ type TcpPort struct {
 //go:linkname GetPublicRoute github.com/yaklang/yaklang/common/pcapx.getPublicRoute
 func GetPublicRoute() (*net.Interface, net.IP, net.IP, error)
 
-func NewTcpPort(ctx context.Context, rate int) (*TcpPort, error) {
+func NewPcapScanner(ctx context.Context, rate int) (*TcpPort, error) {
 	e, _, src, err := GetPublicRoute()
 	if err != nil {
 		return nil, err
@@ -60,7 +60,7 @@ func NewTcpPort(ctx context.Context, rate int) (*TcpPort, error) {
 	scanner := &TcpPort{
 		Alive:      make(chan netip.AddrPort, 1024),
 		handle:     h,
-		ticker:     time.NewTicker(time.Second / time.Duration(rate)),
+		rate:       rate,
 		sendQueue:  make(chan []byte, 1024),
 		ctx:        ctx,
 		pending:    utils.NewTTLSet[netip.AddrPort](time.Second * 10),
@@ -139,13 +139,12 @@ func (t *TcpPort) sendLoop(ctx context.Context) {
 	defer func() {
 		t.sendDone <- struct{}{}
 	}()
-	for {
-		select {
-		case <-ctx.Done():
-			t.ticker.Stop()
-			return
-		case <-t.ticker.C:
+	if t.rate == -1 {
+		// no rate limit
+		for {
 			select {
+			case <-ctx.Done():
+				return
 			case pk := <-t.sendQueue:
 				// channel closed
 				if pk == nil {
@@ -155,7 +154,28 @@ func (t *TcpPort) sendLoop(ctx context.Context) {
 				if err != nil {
 					log.Printf("send packet error: %v", err)
 				}
-			default:
+			}
+		}
+	} else {
+		ticker := time.NewTicker(time.Second / time.Duration(t.rate))
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				select {
+				case pk := <-t.sendQueue:
+					// channel closed
+					if pk == nil {
+						return
+					}
+					err := t.handle.WritePacketData(pk)
+					if err != nil {
+						log.Printf("send packet error: %v", err)
+					}
+				default:
+				}
 			}
 		}
 	}

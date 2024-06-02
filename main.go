@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"gopkg.in/yaml.v3"
 	"log"
 	"net/netip"
@@ -24,22 +25,31 @@ var (
 	ArgPort    string
 	ArgTestURL string
 	ArgOutput  string
+	ArgPcap    bool
+	ArgRate    int
 )
 
 func main() {
 	flag.StringVar(&ArgPrefix, "prefix", "", "prefix")
-	flag.StringVar(&ArgPort, "port", "10808,10809,20171,20170,20172,7890,7891,7892,7893", "")
+	flag.StringVar(&ArgPort, "port", "10808,10809,20170-20172,7890-7893", "split by , use - for range, eg: 10808,10809,20171-20172,7890-7893")
 	flag.StringVar(&ArgTestURL, "url", "http://www.gstatic.com/generate_204", "")
 	flag.StringVar(&ArgOutput, "output", "proxies.yaml", "output file")
+	flag.BoolVar(&ArgPcap, "pcap", false, "use pcap")
+	flag.IntVar(&ArgRate, "rate", 3000, "rate, -1 for unlimited")
 	flag.Parse()
 
-	scan.TestURL = ArgTestURL
+	// assert rate
+	if !(ArgRate == -1 || ArgRate > 0) {
+		log.Fatal("rate must be -1 or >0")
+	}
 
+	// parse prefix
 	var prefixs []netip.Prefix
 	for _, prefix := range strings.Split(ArgPrefix, ",") {
 		prefixs = append(prefixs, netip.MustParsePrefix(prefix))
 	}
 
+	// parse port
 	var ports []int
 	for _, port := range strings.Split(ArgPort, ",") {
 		if strings.Contains(port, "-") {
@@ -64,14 +74,27 @@ func main() {
 		}
 	}
 
-	list := scan.ScanAll(prefixs, ports)
+	s := scan.Default()
+	s.TestUrl = ArgTestURL
+	s.PortScanRate = ArgRate
+	s.UsePcap = ArgPcap
+	list := s.ScanAll(prefixs, ports)
+
+	// generate output
 	output := make(map[string][]Proxy)
 	output["proxies"] = make([]Proxy, 0, len(list))
 	for _, addr := range list {
-		name, err := scan.Position(addr.String())
+		var name string
+		geo, err := s.Position(addr.String())
 		if err != nil {
 			log.Println(err)
 			name = "[Unknown]" + addr.String()
+		} else {
+			pos := geo.City
+			if pos == "" {
+				pos = geo.Organization
+			}
+			name = fmt.Sprintf("[%s]%s(%s)", geo.CountryCode, pos, addr.String())
 		}
 		output["proxies"] = append(output["proxies"], Proxy{
 			Name:   name,
