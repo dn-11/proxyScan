@@ -4,6 +4,7 @@ go 1.22
 
 require (
 	github.com/google/gopacket v1.1.19
+	github.com/yaklang/pcap v1.0.0-rc2
 	github.com/yaklang/yaklang v1.3.3
 	golang.org/x/net v0.25.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -55,7 +56,6 @@ require (
 	github.com/twmb/murmur3 v1.1.6 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/vjeantet/grok v1.0.0 // indirect
-	github.com/yaklang/pcap v1.0.0-rc2 // indirect
 	golang.org/x/crypto v0.23.0 // indirect
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d // indirect
 	golang.org/x/mod v0.13.0 // indirect
