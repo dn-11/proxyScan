@@ -1,4 +1,4 @@
-module proxyScan
+module github.com/hdu-dn11/proxyScan
 
 go 1.22
 
