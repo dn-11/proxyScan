@@ -3,18 +3,19 @@ package scan
 import (
 	"context"
 	"fmt"
+	"github.com/hdu-dn11/proxyScan/pool"
+	"github.com/hdu-dn11/proxyScan/scan/tcpport"
+	"github.com/hdu-dn11/proxyScan/utils"
 	"golang.org/x/net/proxy"
 	"log"
 	"net/http"
 	"net/netip"
-	"proxyScan/pool"
-	"proxyScan/scan/tcpport"
-	"proxyScan/utils"
 	"sync"
 	"time"
 )
 
 type Scanner struct {
+	UseIPRaw     bool
 	UsePcap      bool
 	TestUrl      string
 	TestCallback func(resp *http.Response) bool
@@ -85,6 +86,24 @@ func (s *Scanner) ScanAll(prefixs []netip.Prefix, port []int) []netip.AddrPort {
 		})
 		fmt.Println("wait for tcp scan.")
 		portScanner.Wait()
+	} else if s.UseIPRaw {
+		ipRawScaner, err := tcpport.NewIPRawScanner(context.Background(), s.PortScanRate)
+		if err != nil {
+			log.Fatal(err)
+		}
+		go func() {
+			for addrport := range ipRawScaner.Alive {
+				fmt.Println(addrport.String(), " alive.")
+				c.C <- addrport
+			}
+		}()
+		ipGenerator(prefixs)(func(addr netip.Addr) {
+			for _, pt := range port {
+				ipRawScaner.Send(netip.AddrPortFrom(addr, uint16(pt)))
+			}
+		})
+		fmt.Println("wait for tcp scan.")
+		ipRawScaner.Wait()
 	} else {
 		p := pool.Pool{Size: s.PortScanRate, Buffer: s.PortScanRate}
 		p.Init()

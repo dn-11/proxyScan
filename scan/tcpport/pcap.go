@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+	"github.com/hdu-dn11/proxyScan/utils"
 	"github.com/yaklang/pcap"
 	"github.com/yaklang/yaklang/common/pcapx"
 	"github.com/yaklang/yaklang/common/pcapx/pcaputil"
@@ -14,7 +15,6 @@ import (
 	"math/rand/v2"
 	"net"
 	"net/netip"
-	"proxyScan/utils"
 	"time"
 	_ "unsafe"
 )

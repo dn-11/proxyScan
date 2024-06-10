@@ -3,11 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/hdu-dn11/proxyScan/scan"
 	"gopkg.in/yaml.v3"
 	"log"
 	"net/netip"
 	"os"
-	"proxyScan/scan"
 	"strconv"
 	"strings"
 )
@@ -26,6 +26,7 @@ var (
 	ArgTestURL string
 	ArgOutput  string
 	ArgPcap    bool
+	ArgIPRaw   bool
 	ArgRate    int
 )
 
@@ -35,6 +36,7 @@ func main() {
 	flag.StringVar(&ArgTestURL, "url", "http://www.gstatic.com/generate_204", "")
 	flag.StringVar(&ArgOutput, "output", "proxies.yaml", "output file")
 	flag.BoolVar(&ArgPcap, "pcap", false, "use pcap")
+	flag.BoolVar(&ArgIPRaw, "ipraw", false, "use ip raw")
 	flag.IntVar(&ArgRate, "rate", 3000, "rate, -1 for unlimited")
 	flag.Parse()
 
@@ -78,6 +80,7 @@ func main() {
 	s.TestUrl = ArgTestURL
 	s.PortScanRate = ArgRate
 	s.UsePcap = ArgPcap
+	s.UseIPRaw = ArgIPRaw
 	list := s.ScanAll(prefixs, ports)
 
 	// generate output

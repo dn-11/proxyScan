@@ -4,7 +4,7 @@ go 1.22
 
 require (
 	github.com/google/gopacket v1.1.19
-	github.com/yaklang/pcap v1.0.0-rc2
+	github.com/yaklang/pcap v1.0.3
 	github.com/yaklang/yaklang v1.3.3
 	golang.org/x/net v0.25.0
 	gopkg.in/yaml.v3 v3.0.1
