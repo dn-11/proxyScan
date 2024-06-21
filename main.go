@@ -3,11 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/hdu-dn11/proxyScan/scan"
 	"gopkg.in/yaml.v3"
 	"log"
 	"net/netip"
 	"os"
-	"proxyScan/scan"
 	"strconv"
 	"strings"
 )

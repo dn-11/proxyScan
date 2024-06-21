@@ -3,13 +3,13 @@ package scan
 import (
 	"context"
 	"fmt"
+	"github.com/hdu-dn11/proxyScan/pool"
+	"github.com/hdu-dn11/proxyScan/scan/tcpport"
+	"github.com/hdu-dn11/proxyScan/utils"
 	"golang.org/x/net/proxy"
 	"log"
 	"net/http"
 	"net/netip"
-	"proxyScan/pool"
-	"proxyScan/scan/tcpport"
-	"proxyScan/utils"
 	"sync"
 	"time"
 )
