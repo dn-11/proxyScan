@@ -2,11 +2,9 @@ package scan
 
 import (
 	"context"
-	"fmt"
 	"github.com/hdu-dn11/proxyScan/pool"
-	"github.com/hdu-dn11/proxyScan/scan/tcpport"
+	"github.com/hdu-dn11/proxyScan/scan/tcpscanner"
 	"github.com/hdu-dn11/proxyScan/utils"
-	"golang.org/x/net/proxy"
 	"log"
 	"net/http"
 	"net/netip"
@@ -67,45 +65,33 @@ func (s *Scanner) ScanAll(prefixs []netip.Prefix, port []int) []netip.AddrPort {
 		addrCount += 1 << (32 - prefix.Bits())
 	}
 
+	var sc tcpscanner.Scanner
+
 	if s.UsePcap {
-		portScanner, err := tcpport.NewPcapScanner(context.Background(), s.PortScanRate)
+		psc, err := tcpscanner.NewPcapScanner(context.Background(), s.PortScanRate)
 		if err != nil {
 			log.Fatal(err)
 		}
-		go func() {
-			for addrPort := range portScanner.Alive {
-				log.Println(addrPort.String(), " alive.")
-				c.C <- addrPort
-			}
-		}()
-		ipGenerator(prefixs)(func(addr netip.Addr) {
-			for _, pt := range port {
-				portScanner.Send(netip.AddrPortFrom(addr, uint16(pt)))
-			}
-		})
-		log.Println("wait for tcp scan.")
-		portScanner.Wait()
+		sc = psc
 	} else {
-		p := pool.Pool{Size: s.PortScanRate, Buffer: s.PortScanRate}
-		p.Init()
-		defer p.Close()
-		var wg sync.WaitGroup
-		wg.Add(addrCount * len(port))
-		ipGenerator(prefixs)(func(addr netip.Addr) {
-			for _, pt := range port {
-				p.Submit(func() {
-					defer wg.Done()
-					if tcpport.CommonScan(addr.String() + ":" + fmt.Sprint(pt)) {
-						addrport := netip.AddrPortFrom(addr, uint16(pt))
-						log.Println(addrport.String(), " alive.")
-						c.C <- addrport
-					}
-				})
-			}
-		})
-		log.Println("wait for tcp scan.")
-		wg.Wait()
+		sc = tcpscanner.NewSystemScanner(context.Background(), s.PortScanRate)
 	}
+
+	go func() {
+		for addrPort := range sc.Alive() {
+			log.Println(addrPort.String(), " alive.")
+			c.C <- addrPort
+		}
+	}()
+
+	ipGenerator(prefixs)(func(addr netip.Addr) {
+		for _, pt := range port {
+			sc.Send(netip.AddrPortFrom(addr, uint16(pt)))
+		}
+	})
+	log.Println("wait for tcp scan.")
+	sc.End()
+
 	log.Println("tcp scan done.")
 	aliveTCPAddrs := c.Return()
 
@@ -130,27 +116,4 @@ func (s *Scanner) ScanAll(prefixs []netip.Prefix, port []int) []netip.AddrPort {
 	wg.Wait()
 	log.Println("socks5 scan done.")
 	return c.Return()
-}
-
-func (s *Scanner) scanSocks5(addrPort string) bool {
-	dialer, err := proxy.SOCKS5("tcp", addrPort, nil, proxy.Direct)
-	if err != nil {
-		log.Println(err)
-		return false
-	}
-	dialerCtx, ok := dialer.(proxy.ContextDialer)
-	if !ok {
-		log.Println("dialer is not a ContextDialer")
-		return false
-	}
-	c := http.Client{
-		Transport: &http.Transport{
-			DialContext: dialerCtx.DialContext,
-		},
-		Timeout: s.TestTimeout,
-	}
-	resp, err := c.Get(s.TestUrl)
-
-	defer c.CloseIdleConnections()
-	return s.TestCallback(resp)
 }

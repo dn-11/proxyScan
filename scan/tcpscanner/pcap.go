@@ -1,4 +1,4 @@
-package tcpport
+package tcpscanner
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"github.com/yaklang/pcap"
 	"github.com/yaklang/yaklang/common/pcapx"
 	"github.com/yaklang/yaklang/common/pcapx/pcaputil"
+	"golang.org/x/time/rate"
 	"io"
 	"log"
 	"math/rand/v2"
@@ -19,27 +20,32 @@ import (
 	_ "unsafe"
 )
 
-type TcpPort struct {
-	Alive chan netip.AddrPort
-
+type PcapScanner struct {
 	ctx        context.Context
-	cancelSend context.CancelFunc
 	cancelRead context.CancelFunc
-	rate       int
-	pending    *utils.TTLSet[netip.AddrPort]
 
-	handle    *pcap.Handle
-	sendQueue chan []byte
+	limiter *rate.Limiter
+	handle  *pcap.Handle
+	pending *utils.TTLSet[netip.AddrPort]
+	end     bool
 
 	srcIP net.IP
-
-	sendDone chan struct{}
+	alive chan netip.AddrPort
 }
 
-//go:linkname GetPublicRoute github.com/yaklang/yaklang/common/pcapx.getPublicRoute
-func GetPublicRoute() (*net.Interface, net.IP, net.IP, error)
+func (t *PcapScanner) Alive() chan netip.AddrPort {
+	return t.alive
+}
 
-func NewPcapScanner(ctx context.Context, rate int) (*TcpPort, error) {
+func (t *PcapScanner) End() {
+	t.end = true
+	t.pending.Wait()
+	t.cancelRead()
+}
+
+var _ Scanner = (*PcapScanner)(nil)
+
+func NewPcapScanner(ctx context.Context, r int) (*PcapScanner, error) {
 	e, _, src, err := GetPublicRoute()
 	if err != nil {
 		return nil, err
@@ -55,26 +61,25 @@ func NewPcapScanner(ctx context.Context, rate int) (*TcpPort, error) {
 	if err := h.SetBPFFilter("tcp and src host not " + src.String()); err != nil {
 		return nil, fmt.Errorf("set bpf filter: %v", err)
 	}
-	ctxSend, cancelSend := context.WithCancel(ctx)
 	ctxRead, cancelRead := context.WithCancel(ctx)
-	scanner := &TcpPort{
-		Alive:      make(chan netip.AddrPort, 1024),
+	scanner := &PcapScanner{
+		alive:      make(chan netip.AddrPort, 1024),
 		handle:     h,
-		rate:       rate,
-		sendQueue:  make(chan []byte, 1024),
+		limiter:    utils.ParseLimiter(r),
 		ctx:        ctx,
 		pending:    utils.NewTTLSet[netip.AddrPort](time.Second * 10),
 		srcIP:      src,
-		sendDone:   make(chan struct{}),
-		cancelSend: cancelSend,
 		cancelRead: cancelRead,
 	}
-	go scanner.sendLoop(ctxSend)
 	go scanner.recLoop(ctxRead)
 	return scanner, nil
 }
 
-func (t *TcpPort) Send(addr netip.AddrPort) {
+func (t *PcapScanner) Send(addr netip.AddrPort) {
+	if t.end {
+		log.Println("calling Send after ended is not allowed.")
+		return
+	}
 	linkLayer, err := pcapx.GetPublicToServerLinkLayerIPv4()
 	if err != nil {
 		log.Printf("get link layer error: %v", err)
@@ -119,70 +124,23 @@ func (t *TcpPort) Send(addr netip.AddrPort) {
 		return
 	}
 
-	t.sendQueue <- buf.Bytes()
+	if err := t.limiter.Wait(t.ctx); err != nil {
+		if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+			log.Printf("limiter: %v", err)
+		}
+		return
+	}
+
+	if err := t.handle.WritePacketData(buf.Bytes()); err != nil {
+		log.Printf("write packet fail: %v", err)
+		return
+	}
+
 	t.pending.Add(addr)
 }
 
-func (t *TcpPort) Wait() {
-	close(t.sendQueue)
-	for len(t.sendQueue) != 0 {
-		time.Sleep(time.Millisecond * 300)
-	}
-	t.cancelSend()
-	<-t.sendDone
-	t.handle.Close()
-	t.pending.Wait()
-	t.cancelRead()
-}
-
-func (t *TcpPort) sendLoop(ctx context.Context) {
-	defer func() {
-		t.sendDone <- struct{}{}
-	}()
-	if t.rate == -1 {
-		// no rate limit
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case pk := <-t.sendQueue:
-				// channel closed
-				if pk == nil {
-					return
-				}
-				err := t.handle.WritePacketData(pk)
-				if err != nil {
-					log.Printf("send packet error: %v", err)
-				}
-			}
-		}
-	} else {
-		ticker := time.NewTicker(time.Second / time.Duration(t.rate))
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				select {
-				case pk := <-t.sendQueue:
-					// channel closed
-					if pk == nil {
-						return
-					}
-					err := t.handle.WritePacketData(pk)
-					if err != nil {
-						log.Printf("send packet error: %v", err)
-					}
-				default:
-				}
-			}
-		}
-	}
-}
-
-func (t *TcpPort) recLoop(ctx context.Context) {
-	defer close(t.Alive)
+func (t *PcapScanner) recLoop(ctx context.Context) {
+	defer close(t.alive)
 	for {
 		select {
 		case <-ctx.Done():
@@ -219,8 +177,11 @@ func (t *TcpPort) recLoop(ctx context.Context) {
 			}
 			addrPort := netip.AddrPortFrom(netipip, uint16(tcpLayer.SrcPort))
 			if t.pending.Take(addrPort) {
-				t.Alive <- addrPort
+				t.alive <- addrPort
 			}
 		}
 	}
 }
+
+//go:linkname GetPublicRoute github.com/yaklang/yaklang/common/pcapx.getPublicRoute
+func GetPublicRoute() (*net.Interface, net.IP, net.IP, error)

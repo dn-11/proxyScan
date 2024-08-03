@@ -1,15 +1,5 @@
 package pool
 
-import (
-	"context"
-	"log"
-)
-
-type Worker struct {
-	Func   chan func()
-	Cancel context.CancelFunc
-}
-
 type Pool struct {
 	Size    int
 	Buffer  int
@@ -25,35 +15,15 @@ func NewDefaultPool() *Pool {
 
 func (p *Pool) Init() {
 	p.tasks = make(chan func(), p.Buffer)
+	p.workers = make([]*Worker, p.Size)
 	for i := 0; i < p.Size; i++ {
-		worker := &Worker{
-			Func: p.tasks,
-		}
-		p.workers = append(p.workers, worker)
-		go worker.Run()
+		p.workers[i] = NewWorker(p.tasks)
+		go p.workers[i].Run()
 	}
 }
 
 func (p *Pool) Submit(f func()) {
 	p.tasks <- f
-}
-
-func (w *Worker) Run() {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Println("Recovered ", r)
-		}
-	}()
-	ctx, cancel := context.WithCancel(context.Background())
-	w.Cancel = cancel
-	for {
-		select {
-		case f := <-w.Func:
-			f()
-		case <-ctx.Done():
-			return
-		}
-	}
 }
 
 func (p *Pool) Close() {
