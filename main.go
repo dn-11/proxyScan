@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/netip"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -90,26 +91,33 @@ func main() {
 			log.Println(err)
 			name = "[Unknown]" + addr.String()
 		} else {
-			pos := geo.City
-			if pos == "" {
-				pos = geo.Organization
+			code := geo.CountryCode
+			if code == "" {
+				code = "Unknown"
 			}
-			name = fmt.Sprintf("[%s]%s(%s)", geo.CountryCode, pos, addr.String())
+			if geo.Region != "" {
+				code += "-" + geo.Region
+			}
+			name = fmt.Sprintf("[%s]%s(%s)", code, geo.Org, addr.String())
 		}
+		log.Printf("[+] %s", name)
 		output["proxies"] = append(output["proxies"], Proxy{
 			Name:   name,
 			Type:   "socks5",
 			Server: addr.Addr().String(),
 			Port:   int(addr.Port()),
-			Udp:    true,
+			Udp:    false,
 		},
 		)
 	}
 
+	log.Printf("Total %d proxies", len(list))
 	data, err := yaml.Marshal(output)
 	if err != nil {
 		log.Fatal(err)
 	}
+	abs, err := filepath.Abs(ArgOutput)
+	log.Printf("Output to %s", abs)
 	err = os.WriteFile(ArgOutput, data, 0644)
 	if err != nil {
 		log.Fatal(err)

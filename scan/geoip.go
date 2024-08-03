@@ -9,21 +9,20 @@ import (
 )
 
 type GeoIP struct {
-	Ip            string  `json:"ip"`
-	ContinentCode string  `json:"continent_code"`
-	Country       string  `json:"country"`
-	CountryCode   string  `json:"country_code"`
-	CountryCode3  string  `json:"country_code3"`
-	Region        string  `json:"region"`
-	RegionCode    string  `json:"region_code"`
-	City          string  `json:"city"`
-	PostalCode    string  `json:"postal_code"`
-	Latitude      float64 `json:"latitude"`
-	Longitude     float64 `json:"longitude"`
-	Timezone      string  `json:"timezone"`
-	Offset        int     `json:"offset"`
-	Asn           int     `json:"asn"`
-	Organization  string  `json:"organization"`
+	Query       string  `json:"query"`
+	Status      string  `json:"status"`
+	Country     string  `json:"country"`
+	CountryCode string  `json:"countryCode"`
+	Region      string  `json:"region"`
+	RegionName  string  `json:"regionName"`
+	City        string  `json:"city"`
+	Zip         string  `json:"zip"`
+	Lat         float64 `json:"lat"`
+	Lon         float64 `json:"lon"`
+	Timezone    string  `json:"timezone"`
+	Isp         string  `json:"isp"`
+	Org         string  `json:"org"`
+	As          string  `json:"as"`
 }
 
 func (s *Scanner) Position(addrPort string) (*GeoIP, error) {
@@ -41,7 +40,7 @@ func (s *Scanner) Position(addrPort string) (*GeoIP, error) {
 		},
 		Timeout: s.TestTimeout,
 	}
-	resp, err := c.Get("https://ip.seeip.org/geoip")
+	resp, err := c.Get("http://ip-api.com/json/")
 	if err != nil {
 		return nil, err
 	}
