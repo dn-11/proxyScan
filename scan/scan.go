@@ -88,6 +88,7 @@ func (s *Scanner) ScanAll(prefixs []netip.Prefix, port []int) []netip.AddrPort {
 	} else {
 		p := pool.Pool{Size: s.PortScanRate, Buffer: s.PortScanRate}
 		p.Init()
+		defer p.Close()
 		var wg sync.WaitGroup
 		wg.Add(addrCount * len(port))
 		ipGenerator(prefixs)(func(addr netip.Addr) {
@@ -111,6 +112,7 @@ func (s *Scanner) ScanAll(prefixs []netip.Prefix, port []int) []netip.AddrPort {
 	log.Println("start socks5 scan with 128 threads.")
 	p := pool.Pool{Size: 128, Buffer: 128}
 	p.Init()
+	defer p.Close()
 	c = utils.NewCollector[netip.AddrPort]()
 	var wg sync.WaitGroup
 	wg.Add(len(aliveTCPAddrs))

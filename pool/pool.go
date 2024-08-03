@@ -1,10 +1,13 @@
 package pool
 
-import "log"
+import (
+	"context"
+	"log"
+)
 
 type Worker struct {
-	Func chan func()
-	Stop chan struct{}
+	Func   chan func()
+	Cancel context.CancelFunc
 }
 
 type Pool struct {
@@ -41,12 +44,20 @@ func (w *Worker) Run() {
 			log.Println("Recovered ", r)
 		}
 	}()
+	ctx, cancel := context.WithCancel(context.Background())
+	w.Cancel = cancel
 	for {
 		select {
 		case f := <-w.Func:
 			f()
-		case <-w.Stop:
+		case <-ctx.Done():
 			return
 		}
+	}
+}
+
+func (p *Pool) Close() {
+	for _, w := range p.workers {
+		w.Cancel()
 	}
 }
