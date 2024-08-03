@@ -79,7 +79,7 @@ func (s *Scanner) ScanAll(prefixs []netip.Prefix, port []int) []netip.AddrPort {
 
 	go func() {
 		for addrPort := range sc.Alive() {
-			log.Println(addrPort.String(), " alive.")
+			log.Println("[+]", addrPort.String())
 			c.C <- addrPort
 		}
 	}()
@@ -107,7 +107,7 @@ func (s *Scanner) ScanAll(prefixs []netip.Prefix, port []int) []netip.AddrPort {
 			defer wg.Done()
 			if s.scanSocks5(addrPort.String()) {
 				c.C <- addrPort
-				log.Printf("Found %s socks5 alive\n", addrPort.String())
+				log.Printf("[+] socks5 %s", addrPort.String())
 			}
 		})
 	}

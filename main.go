@@ -98,7 +98,7 @@ func main() {
 			if geo.Region != "" {
 				code += "-" + geo.Region
 			}
-			name = fmt.Sprintf("[%s]%s(%s)", code, geo.Org, addr.String())
+			name = fmt.Sprintf("[%s]%s", code, geo.Org)
 		}
 		log.Printf("[+] %s", name)
 		output["proxies"] = append(output["proxies"], Proxy{
@@ -111,13 +111,13 @@ func main() {
 		)
 	}
 
-	log.Printf("Total %d proxies", len(list))
+	log.Printf("total %d proxies", len(list))
 	data, err := yaml.Marshal(output)
 	if err != nil {
 		log.Fatal(err)
 	}
 	abs, err := filepath.Abs(ArgOutput)
-	log.Printf("Output to %s", abs)
+	log.Printf("output to %s", abs)
 	err = os.WriteFile(ArgOutput, data, 0644)
 	if err != nil {
 		log.Fatal(err)
