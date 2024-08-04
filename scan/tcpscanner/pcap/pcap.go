@@ -1,4 +1,4 @@
-package tcpscanner
+package pcap
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+	"github.com/hdu-dn11/proxyScan/scan/tcpscanner"
 	"github.com/hdu-dn11/proxyScan/utils"
 	"github.com/yaklang/pcap"
 	"github.com/yaklang/yaklang/common/pcapx"
@@ -20,7 +21,11 @@ import (
 	_ "unsafe"
 )
 
-type PcapScanner struct {
+func init() {
+	tcpscanner.Register("pcap", NewScanner)
+}
+
+type Scanner struct {
 	ctx        context.Context
 	cancelRead context.CancelFunc
 
@@ -33,19 +38,19 @@ type PcapScanner struct {
 	alive chan netip.AddrPort
 }
 
-func (t *PcapScanner) Alive() chan netip.AddrPort {
+func (t *Scanner) Alive() chan netip.AddrPort {
 	return t.alive
 }
 
-func (t *PcapScanner) End() {
+func (t *Scanner) End() {
 	t.end = true
 	t.pending.Wait()
 	t.cancelRead()
 }
 
-var _ Scanner = (*PcapScanner)(nil)
+var _ tcpscanner.Scanner = (*Scanner)(nil)
 
-func NewPcapScanner(ctx context.Context, r int) (*PcapScanner, error) {
+func NewScanner(ctx context.Context, r int) (tcpscanner.Scanner, error) {
 	e, _, src, err := GetPublicRoute()
 	if err != nil {
 		return nil, err
@@ -62,12 +67,12 @@ func NewPcapScanner(ctx context.Context, r int) (*PcapScanner, error) {
 		return nil, fmt.Errorf("set bpf filter: %v", err)
 	}
 	ctxRead, cancelRead := context.WithCancel(ctx)
-	scanner := &PcapScanner{
+	scanner := &Scanner{
 		alive:      make(chan netip.AddrPort, 1024),
 		handle:     h,
 		limiter:    utils.ParseLimiter(r),
 		ctx:        ctx,
-		pending:    utils.NewTTLSet[netip.AddrPort](time.Second * 10),
+		pending:    utils.NewTTLSet[netip.AddrPort](time.Second * 5),
 		srcIP:      src,
 		cancelRead: cancelRead,
 	}
@@ -75,7 +80,7 @@ func NewPcapScanner(ctx context.Context, r int) (*PcapScanner, error) {
 	return scanner, nil
 }
 
-func (t *PcapScanner) Send(addr netip.AddrPort) {
+func (t *Scanner) Send(addr netip.AddrPort) {
 	if t.end {
 		log.Println("calling Send after ended is not allowed.")
 		return
@@ -139,7 +144,7 @@ func (t *PcapScanner) Send(addr netip.AddrPort) {
 	t.pending.Add(addr)
 }
 
-func (t *PcapScanner) recLoop(ctx context.Context) {
+func (t *Scanner) recLoop(ctx context.Context) {
 	defer close(t.alive)
 	for {
 		select {

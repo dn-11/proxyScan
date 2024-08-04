@@ -3,7 +3,9 @@ package scan
 import (
 	"context"
 	"github.com/hdu-dn11/proxyScan/pool"
+	"github.com/hdu-dn11/proxyScan/scan/socks5"
 	"github.com/hdu-dn11/proxyScan/scan/tcpscanner"
+	_ "github.com/hdu-dn11/proxyScan/scan/tcpscanner/system"
 	"github.com/hdu-dn11/proxyScan/utils"
 	"log"
 	"net/http"
@@ -13,7 +15,7 @@ import (
 )
 
 type Scanner struct {
-	UsePcap      bool
+	ScannerType  string
 	TestUrl      string
 	TestCallback func(resp *http.Response) bool
 	TestTimeout  time.Duration
@@ -22,11 +24,8 @@ type Scanner struct {
 
 func Default() *Scanner {
 	return &Scanner{
-		UsePcap: false,
-		TestUrl: "http://www.gstatic.com/generate_204",
-		TestCallback: func(resp *http.Response) bool {
-			return resp != nil && resp.StatusCode/100 == 2
-		},
+		ScannerType:  "system",
+		TestUrl:      "http://www.gstatic.com/generate_204",
 		TestTimeout:  time.Second * 15,
 		PortScanRate: 3000,
 	}
@@ -57,7 +56,7 @@ func ipGenerator(prefixs []netip.Prefix) func(func(addr netip.Addr)) {
 	}
 }
 
-func (s *Scanner) ScanAll(prefixs []netip.Prefix, port []int) []netip.AddrPort {
+func (s *Scanner) ScanSocks5(prefixs []netip.Prefix, port []int) []*socks5.Result {
 	c := utils.NewCollector[netip.AddrPort]()
 
 	addrCount := 0
@@ -65,23 +64,18 @@ func (s *Scanner) ScanAll(prefixs []netip.Prefix, port []int) []netip.AddrPort {
 		addrCount += 1 << (32 - prefix.Bits())
 	}
 
-	var sc tcpscanner.Scanner
-
-	if s.UsePcap {
-		psc, err := tcpscanner.NewPcapScanner(context.Background(), s.PortScanRate)
-		if err != nil {
-			log.Fatal(err)
-		}
-		sc = psc
-	} else {
-		sc = tcpscanner.NewSystemScanner(context.Background(), s.PortScanRate)
+	sc, err := tcpscanner.Get(s.ScannerType, context.Background(), s.PortScanRate)
+	if err != nil {
+		log.Fatalf("get scanner failed: %v", err)
 	}
 
+	done := make(chan struct{})
 	go func() {
 		for addrPort := range sc.Alive() {
 			log.Println("[+]", addrPort.String())
 			c.C <- addrPort
 		}
+		done <- struct{}{}
 	}()
 
 	ipGenerator(prefixs)(func(addr netip.Addr) {
@@ -91,6 +85,7 @@ func (s *Scanner) ScanAll(prefixs []netip.Prefix, port []int) []netip.AddrPort {
 	})
 	log.Println("wait for tcp scan.")
 	sc.End()
+	<-done
 
 	log.Println("tcp scan done.")
 	aliveTCPAddrs := c.Return()
@@ -99,15 +94,18 @@ func (s *Scanner) ScanAll(prefixs []netip.Prefix, port []int) []netip.AddrPort {
 	p := pool.Pool{Size: 128, Buffer: 128}
 	p.Init()
 	defer p.Close()
-	c = utils.NewCollector[netip.AddrPort]()
+	res := utils.NewCollector[*socks5.Result]()
 	var wg sync.WaitGroup
 	wg.Add(len(aliveTCPAddrs))
 	for _, addrPort := range aliveTCPAddrs {
 		p.Submit(func() {
 			defer wg.Done()
-			if s.scanSocks5(addrPort.String()) {
-				c.C <- addrPort
+			info := socks5.GetInfo(addrPort.String())
+			if info.Success {
+				res.C <- info
 				log.Printf("[+] socks5 %s", addrPort.String())
+			} else {
+				log.Printf("[-] not socks5 or too slow %s", addrPort.String())
 			}
 		})
 	}
@@ -115,5 +113,5 @@ func (s *Scanner) ScanAll(prefixs []netip.Prefix, port []int) []netip.AddrPort {
 	log.Println("wait for socks5 scan.")
 	wg.Wait()
 	log.Println("socks5 scan done.")
-	return c.Return()
+	return res.Return()
 }

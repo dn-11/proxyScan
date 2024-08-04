@@ -1,7 +1,8 @@
-package tcpscanner
+package system
 
 import (
 	"context"
+	"github.com/hdu-dn11/proxyScan/scan/tcpscanner"
 	"github.com/hdu-dn11/proxyScan/utils"
 	"golang.org/x/time/rate"
 	"net"
@@ -10,9 +11,13 @@ import (
 	"time"
 )
 
+func init() {
+	tcpscanner.Register("system", NewScanner)
+}
+
 const WaitTimeout = 2 * time.Second
 
-type SystemScanner struct {
+type Scanner struct {
 	alive chan netip.AddrPort
 	end   bool
 
@@ -21,11 +26,11 @@ type SystemScanner struct {
 	wg      sync.WaitGroup
 }
 
-func (c *SystemScanner) Alive() chan netip.AddrPort {
+func (c *Scanner) Alive() chan netip.AddrPort {
 	return c.alive
 }
 
-func (c *SystemScanner) Send(addrPort netip.AddrPort) {
+func (c *Scanner) Send(addrPort netip.AddrPort) {
 	if c.end {
 		return
 	}
@@ -41,19 +46,19 @@ func (c *SystemScanner) Send(addrPort netip.AddrPort) {
 	}()
 }
 
-func (c *SystemScanner) End() {
+func (c *Scanner) End() {
 	c.end = true
 	c.wg.Wait()
 	close(c.alive)
 }
 
-func NewSystemScanner(ctx context.Context, rate int) *SystemScanner {
-	return &SystemScanner{
+func NewScanner(ctx context.Context, rate int) (tcpscanner.Scanner, error) {
+	return &Scanner{
 		alive:   make(chan netip.AddrPort, 1024),
 		end:     false,
 		limiter: utils.ParseLimiter(rate),
 		ctx:     ctx,
-	}
+	}, nil
 }
 
-var _ Scanner = (*SystemScanner)(nil)
+var _ tcpscanner.Scanner = (*Scanner)(nil)

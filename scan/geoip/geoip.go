@@ -1,4 +1,4 @@
-package scan
+package geoip
 
 import (
 	"encoding/json"
@@ -6,6 +6,7 @@ import (
 	"golang.org/x/net/proxy"
 	"io"
 	"net/http"
+	"time"
 )
 
 type GeoIP struct {
@@ -25,7 +26,9 @@ type GeoIP struct {
 	As          string  `json:"as"`
 }
 
-func (s *Scanner) Position(addrPort string) (*GeoIP, error) {
+var TestTimeout = time.Second * 5
+
+func GetGeo(addrPort string) (*GeoIP, error) {
 	dialer, err := proxy.SOCKS5("tcp", addrPort, nil, proxy.Direct)
 	if err != nil {
 		return nil, err
@@ -38,7 +41,7 @@ func (s *Scanner) Position(addrPort string) (*GeoIP, error) {
 		Transport: &http.Transport{
 			DialContext: dialerCtx.DialContext,
 		},
-		Timeout: s.TestTimeout,
+		Timeout: TestTimeout,
 	}
 	resp, err := c.Get("http://ip-api.com/json/")
 	if err != nil {
@@ -59,5 +62,4 @@ func (s *Scanner) Position(addrPort string) (*GeoIP, error) {
 	}
 
 	return &geo, nil
-
 }
