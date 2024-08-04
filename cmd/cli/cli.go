@@ -78,12 +78,7 @@ func Cli() {
 	output := make(map[string][]*convert.ClashSocks5Proxy)
 	output["proxies"] = make([]*convert.ClashSocks5Proxy, 0, len(list))
 	for _, addr := range list {
-		p, err := convert.ToClash(addr)
-		if err != nil {
-			log.Printf("[-] convert failed, skip (addr=%s): %v", addr.AddrPort, err)
-			continue
-		}
-		output["proxies"] = append(output["proxies"], p)
+		output["proxies"] = append(output["proxies"], convert.ToClash(addr))
 	}
 
 	log.Printf("total %d proxies", len(list))

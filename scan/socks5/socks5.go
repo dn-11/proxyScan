@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"time"
 )
@@ -19,18 +20,18 @@ var (
 )
 
 type Result struct {
-	AddrPort string
+	AddrPort netip.AddrPort
 	Success  bool
 	UDP      bool
 }
 
-func GetInfo(addrPort string) *Result {
+func GetInfo(addrPort netip.AddrPort) *Result {
 	res := &Result{
 		AddrPort: addrPort,
 		Success:  false,
 		UDP:      false,
 	}
-	sc, err := socks5.NewClient(addrPort, "", "", 15, 15)
+	sc, err := socks5.NewClient(addrPort.String(), "", "", 15, 15)
 	if err != nil {
 		log.Printf("[-] new socks5 client failed (addr=%s): %v", addrPort, err)
 		return res

@@ -3,11 +3,9 @@ package convert
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"github.com/hdu-dn11/proxyScan/scan/geoip"
 	"github.com/hdu-dn11/proxyScan/scan/socks5"
-	"github.com/hdu-dn11/proxyScan/utils"
-	"net"
-	"strconv"
 	"text/template"
 )
 
@@ -37,22 +35,22 @@ var clashTmpl = template.Must(template.New("clash").Funcs(template.FuncMap{
 [Unknown]{{ .AddrPort }}
 {{- end }}`))
 
-func ToClash(res *socks5.Result) (*ClashSocks5Proxy, error) {
-	host, port, err := net.SplitHostPort(res.AddrPort)
-	if err != nil {
-		return nil, ErrInvalidSocks5Result
-	}
-
-	var buf bytes.Buffer
+func ToClash(res *socks5.Result) *ClashSocks5Proxy {
+	var (
+		buf  bytes.Buffer
+		name string
+	)
 	if err := clashTmpl.Execute(&buf, res); err != nil {
-		return nil, err
+		name = fmt.Sprintf("[Unknown]%s", res.AddrPort.String())
+	} else {
+		name = buf.String()
 	}
 
 	return &ClashSocks5Proxy{
-		Name:   buf.String(),
+		Name:   name,
 		Type:   "socks5",
-		Server: host,
-		Port:   utils.Must(strconv.Atoi(port)),
+		Server: res.AddrPort.Addr().String(),
+		Port:   int(res.AddrPort.Port()),
 		Udp:    res.UDP,
-	}, nil
+	}
 }

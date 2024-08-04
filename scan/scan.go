@@ -100,7 +100,7 @@ func (s *Scanner) ScanSocks5(prefixs []netip.Prefix, port []int) []*socks5.Resul
 	for _, addrPort := range aliveTCPAddrs {
 		p.Submit(func() {
 			defer wg.Done()
-			info := socks5.GetInfo(addrPort.String())
+			info := socks5.GetInfo(addrPort)
 			if info.Success {
 				res.C <- info
 				log.Printf("[+] socks5 %s", addrPort.String())

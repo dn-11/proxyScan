@@ -2,11 +2,12 @@ package socks5
 
 import (
 	"github.com/txthinking/socks5"
+	"net/netip"
 	"testing"
 )
 
 func TestGetInfo(t *testing.T) {
-	res := GetInfo("172.16.4.6:18080")
+	res := GetInfo(netip.MustParseAddrPort("172.16.4.6:18080"))
 	t.Log(*res)
 }
 
