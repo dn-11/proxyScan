@@ -181,7 +181,7 @@ func (t *Scanner) recLoop(ctx context.Context) {
 				continue
 			}
 			addrPort := netip.AddrPortFrom(netipip, uint16(tcpLayer.SrcPort))
-			if t.pending.Take(addrPort) {
+			if t.pending.Exist(addrPort) {
 				t.alive <- addrPort
 			}
 		}
