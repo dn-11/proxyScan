@@ -1,32 +1,27 @@
 package geoip
 
 import (
-	"encoding/json"
 	"fmt"
 	"golang.org/x/net/proxy"
-	"io"
 	"net/http"
 	"time"
 )
 
 type GeoIP struct {
-	Query       string  `json:"query"`
-	Status      string  `json:"status"`
-	Country     string  `json:"country"`
-	CountryCode string  `json:"countryCode"`
-	Region      string  `json:"region"`
-	RegionName  string  `json:"regionName"`
-	City        string  `json:"city"`
-	Zip         string  `json:"zip"`
-	Lat         float64 `json:"lat"`
-	Lon         float64 `json:"lon"`
-	Timezone    string  `json:"timezone"`
-	Isp         string  `json:"isp"`
-	Org         string  `json:"org"`
-	As          string  `json:"as"`
+	City    string
+	Country string
+	ASOrg   string
 }
 
-var TestTimeout = time.Second * 5
+const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36 Edg/127.0.0.0"
+
+var (
+	TestTimeout = time.Second * 5
+)
+
+var tryOrder = []func(*http.Client) *GeoIP{
+	CloudFlare, IPsb, ipWho,
+}
 
 func GetGeo(addrPort string) (*GeoIP, error) {
 	dialer, err := proxy.SOCKS5("tcp", addrPort, nil, proxy.Direct)
@@ -37,29 +32,18 @@ func GetGeo(addrPort string) (*GeoIP, error) {
 	if !ok {
 		return nil, err
 	}
-	c := http.Client{
+	c := &http.Client{
 		Transport: &http.Transport{
 			DialContext: dialerCtx.DialContext,
 		},
 		Timeout: TestTimeout,
 	}
-	resp, err := c.Get("http://ip-api.com/json/")
-	if err != nil {
-		return nil, err
-	}
-	defer c.CloseIdleConnections()
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("status code %d", resp.StatusCode)
-	}
-	var geo GeoIP
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	err = json.Unmarshal(body, &geo)
-	if err != nil {
-		return nil, err
+
+	for _, f := range tryOrder {
+		if geo := f(c); geo != nil {
+			return geo, nil
+		}
 	}
 
-	return &geo, nil
+	return nil, fmt.Errorf("no geoip found")
 }

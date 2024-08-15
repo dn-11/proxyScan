@@ -27,10 +27,10 @@ var clashTmpl = template.Must(template.New("clash").Funcs(template.FuncMap{
 		}
 		return pos
 	},
-}).Parse(`{{ $pos := geo .AddrPort }}
+}).Parse(`{{ $pos := geo .AddrPort.String }}
 {{- with $pos -}}
-[{{ .CountryCode }}{{ if and (ne "" .CountryCode) (ne "" .Region) }}-{{ end }}{{ .Region }}]
-{{- $pos.Org }}({{$.AddrPort}})
+[{{ .Country }}{{ if and (ne "" .Country) (ne "" .City) }}-{{ end }}{{ .City }}]
+{{- $pos.ASOrg }}({{$.AddrPort}})
 {{- else -}}
 [Unknown]{{ .AddrPort }}
 {{- end }}`))
