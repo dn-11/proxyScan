@@ -4,7 +4,6 @@ import (
 	"github.com/hdu-dn11/proxyScan/cmd/cli"
 
 	// import scanner plugins
-	_ "github.com/hdu-dn11/proxyScan/scan/tcpscanner/pcap"
 	_ "github.com/hdu-dn11/proxyScan/scan/tcpscanner/system"
 )
 

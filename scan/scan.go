@@ -47,7 +47,7 @@ func ipGenerator(prefixs []netip.Prefix) func(func(addr netip.Addr)) {
 				ip = ip.Next()
 				select {
 				case <-t.C:
-					log.Printf("Generator %f%%\n", float64(current)/float64(all)*100)
+					log.Printf("IP Generator %d/%d(%f%%)\n", current, all, float64(current)/float64(all)*100)
 				default:
 				}
 				current++
