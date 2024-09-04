@@ -1,6 +1,7 @@
 package pcap
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -8,9 +9,8 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/hdu-dn11/proxyScan/scan/tcpscanner"
 	"github.com/hdu-dn11/proxyScan/utils"
+	"github.com/libp2p/go-netroute"
 	"github.com/yaklang/pcap"
-	"github.com/yaklang/yaklang/common/pcapx"
-	"github.com/yaklang/yaklang/common/pcapx/pcaputil"
 	"golang.org/x/time/rate"
 	"io"
 	"log"
@@ -18,7 +18,6 @@ import (
 	"net"
 	"net/netip"
 	"time"
-	_ "unsafe"
 )
 
 func init() {
@@ -34,8 +33,9 @@ type Scanner struct {
 	pending *utils.TTLSet[netip.AddrPort]
 	end     bool
 
-	srcIP net.IP
-	alive chan netip.AddrPort
+	srcIP     net.IP
+	linkLayer *layers.Ethernet
+	alive     chan netip.AddrPort
 }
 
 func (t *Scanner) Alive() chan netip.AddrPort {
@@ -51,15 +51,24 @@ func (t *Scanner) End() {
 var _ tcpscanner.Scanner = (*Scanner)(nil)
 
 func NewScanner(ctx context.Context, r int) (tcpscanner.Scanner, error) {
-	e, _, src, err := GetPublicRoute()
+	// find route
+	router, err := netroute.New()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get router: %v", err)
 	}
-	eth, err := pcaputil.IfaceNameToPcapIfaceName(e.Name)
+	iface, gw, src, err := router.Route(net.ParseIP("1.1.1.1"))
 	if err != nil {
-		return nil, fmt.Errorf("find pcap iface name: %v", err)
+		return nil, fmt.Errorf("get public route: %v", err)
 	}
-	h, err := pcap.OpenLive(eth, 1600, true, pcap.BlockForever)
+	// build link layer
+	dstmac, err := resolveHardwareAddress(iface, gw)
+	linkLayer := &layers.Ethernet{
+		SrcMAC:       iface.HardwareAddr,
+		DstMAC:       dstmac,
+		EthernetType: layers.EthernetTypeIPv4,
+	}
+	// open pcap
+	h, err := openLive(iface)
 	if err != nil {
 		return nil, fmt.Errorf("open live error: %v", err)
 	}
@@ -75,6 +84,7 @@ func NewScanner(ctx context.Context, r int) (tcpscanner.Scanner, error) {
 		pending:    utils.NewTTLSet[netip.AddrPort](time.Second * 5),
 		srcIP:      src,
 		cancelRead: cancelRead,
+		linkLayer:  linkLayer,
 	}
 	go scanner.recLoop(ctxRead)
 	return scanner, nil
@@ -85,10 +95,11 @@ func (t *Scanner) Send(addr netip.AddrPort) {
 		log.Println("calling Send after ended is not allowed.")
 		return
 	}
-	linkLayer, err := pcapx.GetPublicToServerLinkLayerIPv4()
-	if err != nil {
-		log.Printf("get link layer error: %v", err)
-		return
+
+	linkLayer := &layers.Ethernet{
+		SrcMAC:       bytes.Clone(t.linkLayer.SrcMAC),
+		DstMAC:       bytes.Clone(t.linkLayer.DstMAC),
+		EthernetType: t.linkLayer.EthernetType,
 	}
 
 	networkLayer := &layers.IPv4{
@@ -187,6 +198,3 @@ func (t *Scanner) recLoop(ctx context.Context) {
 		}
 	}
 }
-
-//go:linkname GetPublicRoute github.com/yaklang/yaklang/common/pcapx.getPublicRoute
-func GetPublicRoute() (*net.Interface, net.IP, net.IP, error)

@@ -17,7 +17,7 @@ func ParseLimiter(r int) *rate.Limiter {
 	} else {
 		log.Printf("rate %d/s", r)
 		interval = rate.Every(time.Second / time.Duration(r))
-		b = r / 200
+		b = max(r/200, 1)
 	}
 
 	return rate.NewLimiter(interval, b)
