@@ -46,6 +46,9 @@ func forceConvert[T any, V any](ptr *V) *T {
 	return (*T)(unsafe.Pointer(ptr))
 }
 
+// convert wchar to []byte
+// input MUST be point to sized byte Array
+// example: *[111]byte
 func wchar2bytes[T any](wchar *T) []byte {
 	t := reflect.TypeFor[T]()
 	if t.Kind() != reflect.Array || t.Elem().Kind() != reflect.Uint16 {
