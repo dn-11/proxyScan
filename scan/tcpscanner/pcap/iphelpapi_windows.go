@@ -56,8 +56,8 @@ func wchar2bytes[T any](wchar *T) []byte {
 	}
 	hdr := reflect.SliceHeader{
 		Data: uintptr(unsafe.Pointer(wchar)),
-		Len:  int(t.Size()),
-		Cap:  int(t.Size()),
+		Len:  int(t.Size() * 2),
+		Cap:  int(t.Size() * 2),
 	}
 	s := *(*[]byte)(unsafe.Pointer(&hdr))
 	for i := 0; i < len(s); i += 2 {
