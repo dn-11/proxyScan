@@ -2,7 +2,6 @@ package pcap
 
 import (
 	"golang.org/x/sys/windows"
-	"log"
 	"reflect"
 	"unsafe"
 )
@@ -31,11 +30,9 @@ func getIfTable2(ifTable *PMIB_IF_TABLE2) error {
 	return nil
 }
 
-func freeMibTable(ifTable PMIB_IF_TABLE2) {
-	call, _, err := procFreeMibTable.Call(convertAddr(ifTable))
-	if call != 0 {
-		log.Printf("free mib table failed: %v", err)
-	}
+func freeMibTable(ifTable PMIB_IF_TABLE2) error {
+	_, _, err := procFreeMibTable.Call(convertAddr(ifTable))
+	return err
 }
 
 func convertAddr[T any](in *T) uintptr {

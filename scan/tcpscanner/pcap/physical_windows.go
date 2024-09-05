@@ -53,6 +53,12 @@ func openLive(iface *net.Interface) (*pcap.Handle, error) {
 	if err := getIfTable2(&ifTable); err != nil {
 		return nil, err
 	}
+	defer func(ifTable PMIB_IF_TABLE2) {
+		err := freeMibTable(ifTable)
+		if !errors.Is(err, windows.ERROR_SUCCESS) {
+			fmt.Printf("freeMibTable may leaks memory: %v\n", err)
+		}
+	}(ifTable)
 	ifTableSlice := unsafe.Slice(&ifTable.Table[0], ifTable.NumEntries)
 	idx := slices.IndexFunc(ifTableSlice, func(i _MIB_IF_ROW2) bool { return i.InterfaceIndex == uint32(iface.Index) })
 	if idx == -1 {
