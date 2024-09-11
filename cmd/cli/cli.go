@@ -2,8 +2,8 @@ package cli
 
 import (
 	"flag"
-	"github.com/hdu-dn11/proxyScan/convert"
-	"github.com/hdu-dn11/proxyScan/scan"
+	"github.com/dn-11/proxyScan/convert"
+	"github.com/dn-11/proxyScan/scan"
 	"gopkg.in/yaml.v3"
 	"log"
 	"net/netip"

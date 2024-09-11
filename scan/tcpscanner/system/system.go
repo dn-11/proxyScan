@@ -2,8 +2,8 @@ package system
 
 import (
 	"context"
-	"github.com/hdu-dn11/proxyScan/scan/tcpscanner"
-	"github.com/hdu-dn11/proxyScan/utils"
+	"github.com/dn-11/proxyScan/scan/tcpscanner"
+	"github.com/dn-11/proxyScan/utils"
 	"golang.org/x/time/rate"
 	"net"
 	"net/netip"

@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/hdu-dn11/proxyScan/scan/geoip"
-	"github.com/hdu-dn11/proxyScan/scan/socks5"
+	"github.com/dn-11/proxyScan/scan/geoip"
+	"github.com/dn-11/proxyScan/scan/socks5"
 	"text/template"
 )
 

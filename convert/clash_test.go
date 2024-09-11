@@ -2,7 +2,7 @@ package convert
 
 import (
 	"bytes"
-	"github.com/hdu-dn11/proxyScan/scan/socks5"
+	"github.com/dn-11/proxyScan/scan/socks5"
 	"net/netip"
 	"testing"
 )

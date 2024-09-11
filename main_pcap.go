@@ -2,4 +2,4 @@
 
 package main
 
-import _ "github.com/hdu-dn11/proxyScan/scan/tcpscanner/pcap"
+import _ "github.com/dn-11/proxyScan/scan/tcpscanner/pcap"

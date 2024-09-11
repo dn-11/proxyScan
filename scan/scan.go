@@ -2,11 +2,11 @@ package scan
 
 import (
 	"context"
-	"github.com/hdu-dn11/proxyScan/pool"
-	"github.com/hdu-dn11/proxyScan/scan/socks5"
-	"github.com/hdu-dn11/proxyScan/scan/tcpscanner"
-	_ "github.com/hdu-dn11/proxyScan/scan/tcpscanner/system"
-	"github.com/hdu-dn11/proxyScan/utils"
+	"github.com/dn-11/proxyScan/pool"
+	"github.com/dn-11/proxyScan/scan/socks5"
+	"github.com/dn-11/proxyScan/scan/tcpscanner"
+	_ "github.com/dn-11/proxyScan/scan/tcpscanner/system"
+	"github.com/dn-11/proxyScan/utils"
 	"log"
 	"net/http"
 	"net/netip"
