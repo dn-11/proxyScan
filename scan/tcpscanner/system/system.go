@@ -5,6 +5,7 @@ import (
 	"github.com/dn-11/proxyScan/scan/tcpscanner"
 	"github.com/dn-11/proxyScan/utils"
 	"golang.org/x/time/rate"
+	"log"
 	"net"
 	"net/netip"
 	"sync"
@@ -32,6 +33,11 @@ func (c *Scanner) Alive() chan netip.AddrPort {
 
 func (c *Scanner) Send(addrPort netip.AddrPort) {
 	if c.end {
+		return
+	}
+	err := c.limiter.Wait(c.ctx)
+	if err != nil {
+		log.Printf("limiter wait: %v", err)
 		return
 	}
 	c.wg.Add(1)
