@@ -22,3 +22,9 @@ pcap 模式需要 root 权限。
 **NO WINDOWS XP OR EARLIER VERSIONS SUPPORTED**
 
 不支持 Windows XP 及更早版本
+
+# 测速
+
+测速基准：腾讯云上海2c2g SA5 100Mbps pcap 模式 无速率限制 每个 IP 扫 9 个常用端口
+
+由于长时间跑会被限速，因此跑 /12 直接换算 /0 时间，约为 54 小时
