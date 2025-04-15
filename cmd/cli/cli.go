@@ -2,15 +2,19 @@ package cli
 
 import (
 	"flag"
-	"github.com/dn-11/proxyScan/convert"
-	"github.com/dn-11/proxyScan/scan"
-	"gopkg.in/yaml.v3"
 	"log"
 	"net/netip"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
+
+	"github.com/dn-11/proxyScan/convert"
+	"github.com/dn-11/proxyScan/scan"
+	"gopkg.in/yaml.v3"
 )
 
 func Cli() {
@@ -21,6 +25,7 @@ func Cli() {
 		Output  string
 		Pcap    bool
 		Rate    int
+		Report  bool
 	)
 
 	flag.StringVar(&Prefix, "prefix", "", "prefix")
@@ -29,6 +34,7 @@ func Cli() {
 	flag.StringVar(&Output, "output", "proxies.yaml", "output file")
 	flag.BoolVar(&Pcap, "pcap", false, "use pcap")
 	flag.IntVar(&Rate, "rate", 3000, "rate, -1 for unlimited")
+	flag.BoolVar(&Report, "report", false, "generate proxy test report")
 	flag.Parse()
 
 	// assert rate
@@ -72,24 +78,54 @@ func Cli() {
 	if Pcap {
 		s.ScannerType = "pcap"
 	}
-	list := s.ScanSocks5(prefixs, ports)
 
-	// generate output
-	output := make(map[string][]*convert.ClashSocks5Proxy)
-	output["proxies"] = make([]*convert.ClashSocks5Proxy, 0, len(list))
-	for _, addr := range list {
-		output["proxies"] = append(output["proxies"], convert.ToClash(addr))
+	// setup signal handling
+	sigChan := make(chan os.Signal, 1)
+	doneChan := make(chan struct{})
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	// start scanning
+	go func() {
+		list := s.ScanSocks5(prefixs, ports)
+
+		// generate output
+		output := make(map[string][]*convert.ClashSocks5Proxy)
+		output["proxies"] = make([]*convert.ClashSocks5Proxy, 0, len(list))
+		for _, addr := range list {
+			output["proxies"] = append(output["proxies"], convert.ToClash(addr))
+		}
+
+		log.Printf("total %d proxies", len(list))
+		data, err := yaml.Marshal(output)
+		if err != nil {
+			log.Fatal(err)
+		}
+		abs, _ := filepath.Abs(Output)
+		log.Printf("output to %s", abs)
+		err = os.WriteFile(Output, data, 0644)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		// Wait a moment to ensure file is written
+		time.Sleep(1 * time.Second)
+		close(doneChan)
+	}()
+
+	// wait for signal or scan completion
+	select {
+	case <-sigChan:
+		log.Println("received termination signal, stopping scan...")
+		log.Println("scan stopped")
+		os.Exit(0)
+	case <-doneChan:
+		log.Println("scan completed")
 	}
 
-	log.Printf("total %d proxies", len(list))
-	data, err := yaml.Marshal(output)
-	if err != nil {
-		log.Fatal(err)
-	}
-	abs, err := filepath.Abs(Output)
-	log.Printf("output to %s", abs)
-	err = os.WriteFile(Output, data, 0644)
-	if err != nil {
-		log.Fatal(err)
+	// generate report if -report flag is specified
+	if Report {
+		// Wait a moment to ensure file is written
+		time.Sleep(1 * time.Second)
+		GenerateReport()
 	}
 }
