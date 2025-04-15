@@ -100,7 +100,10 @@ func Cli() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		abs, _ := filepath.Abs(Output)
+		abs, err := filepath.Abs(Output)
+		if err != nil {
+			log.Fatalf("failed to resolve absolute path for output: %v", err)
+		}
 		log.Printf("output to %s", abs)
 		err = os.WriteFile(Output, data, 0644)
 		if err != nil {
