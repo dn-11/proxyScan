@@ -10,10 +10,10 @@
 
 ```shell
 go install github.com/hdu-dn11/proxyScan@latest
-sudo proxyScan -prefix 0.0.0.0/0 -pcap
+sudo proxyScan -prefix 0.0.0.0/0 -pcap -report
 ```
 
-pcap 模式需要 root 权限。
+`-pcap` 模式需要 root 权限。`-report` 选项会连接到扫描出的代理，做一下对 `cloudflare` 的测速和不同方向的 `ip` 出口测试。
 
 建议在 Linux 上运行，效率比 windows 上高十倍起码。
 
