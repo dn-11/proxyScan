@@ -1,4 +1,4 @@
-package proxy_test
+package proxy
 
 import (
 	"fmt"
@@ -16,6 +16,7 @@ func NewReport(results []ProxyResult) *Report {
 	return &Report{
 		Results: results,
 		TestURL: "https://speed.cloudflare.com/__down?bytes=10000000", // 10MB test file
+	}
 }
 
 func (r *Report) GenerateTXT(filename string) error {

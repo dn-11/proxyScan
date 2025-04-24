@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/dn-11/proxyScan/proxy_test"
+	"github.com/dn-11/proxyScan/proxy"
 	"gopkg.in/yaml.v3"
 )
 
@@ -46,14 +46,14 @@ func GenerateReport() {
 	}
 
 	// Create proxy tester
-	tester := proxy_test.NewProxyTester(nil, proxies)
+	tester := proxy.NewProxyTester(nil, proxies)
 
 	// Run tests
 	log.Println("Starting proxy tests...")
 	results := tester.Run()
 
 	// Generate report
-	report := proxy_test.NewReport(results)
+	report := proxy.NewReport(results)
 	if err := report.GenerateTXT("proxy_test_results.txt"); err != nil {
 		log.Fatalf("Failed to generate report: %v", err)
 	}

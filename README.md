@@ -9,7 +9,7 @@
 # Start
 
 ```shell
-go install github.com/hdu-dn11/proxyScan@latest
+go install github.com/dn-11/proxyScan@latest
 sudo proxyScan -prefix 0.0.0.0/0 -pcap -report
 ```
 
